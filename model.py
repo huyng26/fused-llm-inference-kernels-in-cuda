@@ -16,8 +16,16 @@ __device__ float warp_reduce_sum(float val) {
     return val;
 }
 
-# Step 2 - warp_reduce_max (not yet solved)
-# TODO: implement
+# Step 2 - warp_reduce_max
+#define FULLMASK 0xffffffff
+__device__ float warp_reduce_max(float val) {
+    // TODO: implement warp-level max reduction using shuffle intrinsics
+    for(int offset=16; offset > 0; offset >>=1){
+        val = fmaxf(__shfl_xor_sync(FULLMASK, val, offset), val); 
+        // use xor_sync because we want all lane to have the same values, not just one lane holds the final value
+    }
+    return val;
+}
 
 # Step 3 - block_reduce_sum (not yet solved)
 # TODO: implement
