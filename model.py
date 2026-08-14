@@ -27,8 +27,24 @@ __device__ float warp_reduce_max(float val) {
     return val;
 }
 
-# Step 3 - block_reduce_sum (not yet solved)
-# TODO: implement
+# Step 3 - block_reduce_sum
+__device__ float block_reduce_sum(float val, float* shared) {
+    // TODO: block-level sum via warp_reduce_sum + shared memory; result valid on thread 0
+    int lane_id = threadIdx.x % 32;
+    int warp_id = threadIdx.x / 32;
+    int num_warps = (blockDim.x + 31) / 32;
+    // first reduction shuffle the threads inside a warp
+    float warp_val = warp_reduce_sum(val);
+    if(lane_id==0){
+        shared[warp_id] = warp_val;
+    }
+    __syncthreads(); // waits for all warps to write to its shared mem
+    if(warp_id==0){
+        float local_sum = (lane_id < num_warps) ? shared[lane_id] : 0.0f;
+        val = warp_reduce_sum(local_sum);
+    }
+    return val;
+}
 
 # Step 4 - block_reduce_max (not yet solved)
 # TODO: implement
