@@ -107,8 +107,30 @@ __global__ void swiglu_kernel(const float* gate, const float* up, float* out, in
     }
 }
 
-# Step 9 - rmsnorm_kernel (not yet solved)
-# TODO: implement
+# Step 9 - rmsnorm_kernel
+__global__ void rmsnorm_kernel(const float* x, const float* weight, float* out, int n, float eps) {
+    // TODO: Apply RMSNorm per row (one block per row)
+    int row = blockIdx.x;
+    extern __shared__ float shared_mem[];
+    const float* x_row = x + row * n;
+    float* out_row = out + row * n;
+
+    float local_sum = 0.0f;
+    for(int idx = threadIdx.x; idx < n; idx += blockDim.x){
+        local_sum += x_row[idx] * x_row[idx];
+    }
+
+    float blockSum = block_reduce_sum(local_sum, shared_mem); //threads 0 only(not really, because __shfl_xor_sync broadcast the values to all threads?)
+
+    __shared__ float rms;
+    if(threadIdx.x == 0){
+        rms = sqrtf(blockSum / n + eps);
+    }
+    __syncthreads();
+    for(int idx = threadIdx.x; idx < n; idx += blockDim.x){
+        out_row[idx] = (x_row[idx] / rms) * weight[idx];
+    }
+}
 
 # Step 10 - layernorm_kernel (not yet solved)
 # TODO: implement
