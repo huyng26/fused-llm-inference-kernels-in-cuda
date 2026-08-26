@@ -132,8 +132,34 @@ __global__ void rmsnorm_kernel(const float* x, const float* weight, float* out, 
     }
 }
 
-# Step 10 - layernorm_kernel (not yet solved)
-# TODO: implement
+# Step 10 - layernorm_kernel
+__global__ void layernorm_kernel(const float* x, const float* weight, const float* bias, float* out, int n, float eps) {
+    // TODO: per-row LayerNorm using block_reduce_sum for mean and variance
+    __shared__ float shared_sum[32];
+    __shared__ float shared_var[32];
+    int row = blockIdx.x;
+    const float* x_row = x + row * n;
+    float* out_row = out + row * n;
+    float local_sum = 0.0f;
+    float local_var = 0.0f;
+    for(int idx=threadIdx.x; idx < n; idx += blockDim.x){
+        float val = x_row[idx];
+        local_sum += val;
+        local_var += val * val;
+    }
+    __shared__ float mean;
+    __shared__ float var;
+    float blockSum = block_reduce_sum(local_sum, shared_sum);
+    float blockSquared = block_reduce_sum(local_var, shared_var);
+    if(threadIdx.x == 0){
+        mean = blockSum / n;
+        var = (blockSquared / n) - mean * mean; 
+    }
+    __syncthreads();
+    for(int idx = threadIdx.x; idx < n; idx += blockDim.x){
+        out_row[idx] = (x_row[idx] - mean) * rsqrtf(var + eps) * weight[idx] + bias[idx]; 
+    }
+}
 
 # Step 11 - fused_add_rmsnorm_kernel (not yet solved)
 # TODO: implement
