@@ -231,8 +231,47 @@ __global__ void softmax_row_kernel(const float* x, float* out, int rows, int col
     }
 }
 
-# Step 13 - causal_softmax_kernel (not yet solved)
-# TODO: implement
+# Step 13 - causal_softmax_kernel
+__global__ void causal_softmax_kernel(const float* x, float* out, int rows, int cols) {
+    // TODO: numerically stable causal softmax (one block per row);
+    //       mask columns c > row to 0; use block_reduce_max / block_reduce_sum
+    int row = blockIdx.x;
+    const float* x_row = x + row * cols;
+    float* out_row = out + row * cols;
+    __shared__  float s_max[32];
+    __shared__  float s_sum[32];
+    float local_sum = 0.0f;
+    float local_max = -INFINITY;
+    __shared__ float row_max;
+    __shared__ float row_exp_sum;
+
+    for(int idx = threadIdx.x; idx < cols; idx += blockDim.x){
+        float val = (idx > row) ? -INFINITY:x_row[idx];
+        local_max = fmaxf(local_max, val);
+    }
+
+    float blockMax = block_reduce_max(local_max, s_max);
+    if(threadIdx.x == 0){
+        row_max = blockMax; 
+    }
+    __syncthreads();
+
+    for(int idx = threadIdx.x; idx < cols; idx += blockDim.x){
+        float val = (idx > row) ? -INFINITY:x_row[idx];
+        local_sum += expf(val - row_max);
+    }
+    float blockSum = block_reduce_sum(local_sum, s_sum);
+    if(threadIdx.x==0){
+        row_exp_sum=blockSum;
+    }
+    __syncthreads();
+    for(int idx = threadIdx.x; idx < cols; idx += blockDim.x){
+        float val = (idx > row) ? -INFINITY:x_row[idx];
+        out_row[idx] = expf(val - row_max) / row_exp_sum;
+    }
+
+
+}
 
 # Step 14 - embedding_lookup_kernel (not yet solved)
 # TODO: implement
