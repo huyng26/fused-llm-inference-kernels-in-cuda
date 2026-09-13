@@ -334,8 +334,38 @@ __global__ void linear_kernel(const float* x, const float* weight,
     }
 }
 
-# Step 17 - fused_linear_bias_gelu_kernel (not yet solved)
-# TODO: implement
+# Step 17 - fused_linear_bias_gelu_kernel
+__device__ __forceinline__ float gelu_tanh(float x) {
+    constexpr float sqrt_2_over_pi = 0.7978845608028654f;
+    return 0.5f * x *
+           (1.0f + tanhf(
+               sqrt_2_over_pi *
+               (x + 0.044715f * x * x * x)
+           ));
+}
+
+__global__ void fused_linear_bias_gelu_kernel(
+    const float* x, const float* weight, const float* bias,
+    float* out, int M, int N, int K) {
+    // TODO: fuse matmul, bias add, and GELU tanh approx into one kernel
+    (void)x; (void)weight; (void)bias; (void)out; (void)M; (void)N; (void)K;
+    int idx = blockDim.x * blockIdx.x + threadIdx.x;
+    int total = M * N;
+    if(idx >= total) return;
+    int row = idx  / N;
+    int col = idx % N;
+    float acc = 0.0f;
+    //avoid writing multiple time to out[idx]
+    // calling out[idx] multiple time would cause to read and write multiple time to HBM
+    for(int i=0; i < K; i++){
+        acc += x[row * K + i] * weight[col * K + i];
+    }
+    if(bias){
+        acc += bias[col];
+    }
+    acc = gelu_tanh(acc);
+    out[idx] = acc;
+}
 
 # Step 18 - mlp_swiglu_forward (not yet solved)
 # TODO: implement
