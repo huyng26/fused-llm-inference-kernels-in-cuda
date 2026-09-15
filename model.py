@@ -367,8 +367,46 @@ __global__ void fused_linear_bias_gelu_kernel(
     out[idx] = acc;
 }
 
-# Step 18 - mlp_swiglu_forward (not yet solved)
-# TODO: implement
+# Step 18 - mlp_swiglu_forward
+void mlp_swiglu_forward(const float* x, const float* w_gate, const float* w_up,
+                        const float* w_down, float* out,
+                        int M, int hidden_dim, int intermediate_dim) {
+    // TODO: allocate temps, run gate/up linears, swiglu, then down projection
+    float* gate_out;
+    float* up_out;
+    float* swiglu_out;
+    int intermediate_size = M * intermediate_dim * sizeof(float);
+
+    cudaMalloc(&gate_out, intermediate_size);
+    cudaMalloc(&up_out, intermediate_size);
+    cudaMalloc(&swiglu_out, intermediate_size);
+
+    int num_threads = 256;
+    int intermediate_total = M * intermediate_dim;
+    int block_size = (intermediate_total + num_threads - 1) / num_threads;
+    int out_total = M * hidden_dim;
+    int block_size_out = (out_total + num_threads - 1) / num_threads;
+    // gate_out = x @ W_gate
+    linear_kernel<<<block_size, num_threads>>>(
+        x, w_gate, nullptr, gate_out, M, intermediate_dim, hidden_dim
+    );
+    // up_out = x @ W_up
+    linear_kernel<<<block_size, num_threads>>>(
+        x, w_up, nullptr, up_out, M, intermediate_dim, hidden_dim
+    );
+    // swiglu_out = silu(gate_out) * up_out 
+    swiglu_kernel<<<block_size, num_threads>>>(
+        gate_out, up_out, swiglu_out, intermediate_total
+    );
+    // out = swiglu_out * W_down
+    linear_kernel<<<block_size_out, num_threads>>>(
+        swiglu_out, w_down, nullptr, out, M, hidden_dim, intermediate_dim
+    );
+    
+    cudaFree(gate_out);
+    cudaFree(up_out);
+    cudaFree(swiglu_out);
+}
 
 # Step 19 - rmsnorm_residual_block (not yet solved)
 # TODO: implement
